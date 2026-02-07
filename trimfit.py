@@ -12,7 +12,7 @@ Pipeline (per page):
   4) pymupdf: merge all pages
 
 Defaults:
-  --size 8.5x11 (letter portrait)
+  --size letter
   --margin 0.5
 """
 
@@ -32,15 +32,45 @@ import fitz  # pymupdf
 DEFAULT_WIDTH = 8.5
 DEFAULT_HEIGHT = 11.0
 DEFAULT_MARGIN = 0.5
+DEFAULT_SIZE = "letter"
 
 
-def _parse_size(value: str) -> Tuple[float, float]:
-    """Parse 'WIDTHxHEIGHT' string into (width, height) tuple."""
-    try:
-        w, h = value.lower().split("x")
-        return float(w), float(h)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"Invalid size '{value}'. Expected format: WIDTHxHEIGHT (e.g., '8.5x11')")
+def _resolve_size(size_str: str, landscape: bool, portrait: bool) -> Tuple[float, float]:
+    """Resolve a size string to (width, height) in inches.
+
+    Accepts 'WxH' (e.g. '8.5x11') or a paper name (e.g. 'letter', 'a4').
+    Paper names are matched case-insensitively against fitz.paper_sizes(),
+    with 'tabloid' accepted as an alias for 'ledger'.
+    """
+    low = size_str.lower()
+
+    # Try WxH format
+    if "x" in low:
+        try:
+            w_s, h_s = low.split("x")
+            w, h = float(w_s), float(h_s)
+        except ValueError:
+            raise ValueError(
+                f"Invalid size '{size_str}'. Expected WIDTHxHEIGHT (e.g., '8.5x11') or a paper name (e.g., 'letter')"
+            )
+        if landscape or portrait:
+            raise ValueError("--landscape/--portrait cannot be used with explicit WxH dimensions")
+        return w, h
+
+    # Paper name
+    name = low
+    if name == "tabloid":
+        name = "ledger"
+
+    known = fitz.paper_sizes()
+    if name not in known:
+        raise ValueError(
+            f"Unknown paper size '{size_str}'. Use WIDTHxHEIGHT or a paper name (e.g., 'letter', 'a4')"
+        )
+
+    suffix = "-L" if landscape else "-P" if portrait else ""
+    pt = fitz.paper_size(name + suffix)
+    return pt[0] / 72, pt[1] / 72
 
 
 def _visible_rect(page: fitz.Page) -> fitz.Rect:
@@ -191,10 +221,18 @@ def main() -> int:
     parser.add_argument("output_pdf", nargs="?", default="output.pdf", help='Output PDF file (default: "output.pdf")')
     parser.add_argument(
         "--size",
-        type=_parse_size,
-        default=(DEFAULT_WIDTH, DEFAULT_HEIGHT),
-        metavar="WxH",
-        help=f"Output page size as WIDTHxHEIGHT in inches (default: {DEFAULT_WIDTH:.0f}x{DEFAULT_HEIGHT:.0f})"
+        default=DEFAULT_SIZE,
+        metavar="SIZE",
+        help=f'Output page size: WIDTHxHEIGHT in inches or paper name (default: "{DEFAULT_SIZE}")'
+    )
+    orientation = parser.add_mutually_exclusive_group()
+    orientation.add_argument(
+        "--landscape", action="store_true",
+        help="Landscape orientation (paper names only)"
+    )
+    orientation.add_argument(
+        "--portrait", action="store_true",
+        help="Portrait orientation (paper names only)"
     )
     parser.add_argument(
         "--margin",
@@ -203,7 +241,11 @@ def main() -> int:
         help=f"Minimum internal margin in inches (default: {DEFAULT_MARGIN})"
     )
     args = parser.parse_args()
-    width, height = args.size
+
+    try:
+        width, height = _resolve_size(args.size, args.landscape, args.portrait)
+    except ValueError as e:
+        parser.error(str(e))
 
     try:
         normalize_pdf(Path(args.input_pdf), Path(args.output_pdf), width, height, args.margin)

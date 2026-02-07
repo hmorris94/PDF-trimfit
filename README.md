@@ -22,20 +22,25 @@ macOS:
 ## Usage
 
 ```bash
-python trimfit.py input.pdf [output.pdf] [--size WxH] [--margin M]
+python trimfit.py input.pdf [output.pdf] [--size SIZE] [--landscape | --portrait] [--margin M]
 ```
 
-| Option     | Default  | Description                          |
-|------------|----------|--------------------------------------|
-| `--size`   | `8.5x11` | Output page size in inches (WxH)     |
-| `--margin` | `0.5`    | Minimum internal margin in inches    |
+| Option        | Default  | Description                                |
+|---------------|----------|--------------------------------------------|
+| `--size`      | `letter` | Page size: `WxH` in inches or paper name   |
+| `--landscape` |          | Landscape orientation (paper names only)    |
+| `--portrait`  |          | Portrait orientation (paper names only)     |
+| `--margin`    | `0.5`   | Minimum internal margin in inches           |
 
 ## Examples
 
 ```bash
-# Default: 8.5x11 with 0.5in margin
+# Default: letter (8.5x11) with 0.5in margin
 python trimfit.py input.pdf output.pdf
 
-# Letter size with 0.5in margins
-python trimfit.py input.pdf output.pdf --size 11x8.5 --margin 0.5
+# A4 landscape
+python trimfit.py input.pdf output.pdf --size a4 --landscape
+
+# Exact dimensions
+python trimfit.py input.pdf output.pdf --size 17x11 --margin 0.25
 ```
