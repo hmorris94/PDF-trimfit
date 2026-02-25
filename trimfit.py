@@ -5,8 +5,12 @@ trimfit.py
 
 Auto-trim whitespace per page and normalize output to a specified size with a minimum internal margin.
 
-Pipeline (per page):
-  1) pymupdf: crop to visible content (ignoring white fills)
+Modes (default: trim + fit):
+  --trim: trim whitespace only
+  --fit:  fit to page only
+
+Pipeline for --trimfit / --fit (per page):
+  1) pymupdf: crop to visible content (ignoring white fills)  [trimfit only]
   2) pdfjam --papersize inner -> scaled-to-inner
   3) pdfjam --papersize outer --noautoscale true -> padded-to-outer
   4) pymupdf: merge all pages
@@ -144,9 +148,8 @@ def normalize_pdf(
     width: float = DEFAULT_WIDTH,
     height: float = DEFAULT_HEIGHT,
     margin: float = DEFAULT_MARGIN,
+    mode: str = "trimfit",
 ) -> None:
-    _which_or_die("pdfjam")
-
     input_pdf = input_pdf.resolve()
     output_pdf = output_pdf.resolve()
 
@@ -155,13 +158,20 @@ def normalize_pdf(
     if input_pdf.suffix.lower() != ".pdf":
         raise ValueError(f"Input must be a .pdf file: {input_pdf}")
 
+    output_pdf.parent.mkdir(parents=True, exist_ok=True)
+
+    # --trim: crop only, no fitting
+    if mode == "trim":
+        _crop_to_content(input_pdf, output_pdf)
+        return
+
+    _which_or_die("pdfjam")
+
     inner_w = width - 2 * margin
     inner_h = height - 2 * margin
 
     if inner_w <= 0 or inner_h <= 0:
         raise ValueError(f"Margin {margin} is too large for size {width}x{height}")
-
-    output_pdf.parent.mkdir(parents=True, exist_ok=True)
 
     inner = f"{{{inner_w}in,{inner_h}in}}"
     outer = f"{{{width}in,{height}in}}"
@@ -169,12 +179,15 @@ def normalize_pdf(
     with tempfile.TemporaryDirectory(prefix="pdf-trimfit-") as td:
         td_path = Path(td)
 
-        # 1) Crop to visible content per page (ignores white fills)
-        cropped = td_path / "cropped.pdf"
-        _crop_to_content(input_pdf, cropped)
+        # --trimfit: crop first; --fit: skip crop
+        if mode == "trimfit":
+            source = td_path / "cropped.pdf"
+            _crop_to_content(input_pdf, source)
+        else:  # fit
+            source = input_pdf
 
-        # 2-3) Scale and pad each page individually, then merge
-        src = fitz.open(str(cropped))
+        # Scale and pad each page individually, then merge
+        src = fitz.open(str(source))
         result = fitz.open()
 
         for i in range(len(src)):
@@ -219,6 +232,16 @@ def main() -> int:
     )
     parser.add_argument("input_pdf", help="Input PDF file")
     parser.add_argument("output_pdf", nargs="?", default="output.pdf", help='Output PDF file (default: "output.pdf")')
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--trim", dest="mode", action="store_const", const="trim",
+        help="Trim whitespace only, do not fit to page"
+    )
+    mode_group.add_argument(
+        "--fit", dest="mode", action="store_const", const="fit",
+        help="Fit to page only, do not trim whitespace"
+    )
+    parser.set_defaults(mode="trimfit")
     parser.add_argument(
         "--size",
         default=DEFAULT_SIZE,
@@ -242,13 +265,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    try:
-        width, height = _resolve_size(args.size, args.landscape, args.portrait)
-    except ValueError as e:
-        parser.error(str(e))
+    if args.mode != "trim":
+        try:
+            width, height = _resolve_size(args.size, args.landscape, args.portrait)
+        except ValueError as e:
+            parser.error(str(e))
+    else:
+        width = height = 0.0  # unused in trim mode
 
     try:
-        normalize_pdf(Path(args.input_pdf), Path(args.output_pdf), width, height, args.margin)
+        normalize_pdf(Path(args.input_pdf), Path(args.output_pdf), width, height, args.margin, args.mode)
     except Exception as e:
         print(str(e), file=sys.stderr)
         return 1

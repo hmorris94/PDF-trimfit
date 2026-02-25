@@ -22,24 +22,29 @@ macOS:
 ## Usage
 
 ```bash
-python trimfit.py input.pdf [output.pdf] [--size SIZE] [--landscape | --portrait] [--margin M]
+python trimfit.py input.pdf [output.pdf] [--trim | --fit] [--size SIZE] [--landscape | --portrait] [--margin M]
 ```
 
-| Option        | Default  | Description                                |
-|---------------|----------|--------------------------------------------|
-| `--size`      | `letter` | Page size: `WxH` in inches or paper name   |
-| `--landscape` |          | Landscape orientation (paper names only)    |
-| `--portrait`  |          | Portrait orientation (paper names only)     |
-| `--margin`    | `0.5`   | Minimum internal margin in inches           |
+| Option        | Default     | Description                                |
+|---------------|-------------|--------------------------------------------|
+| `--trim`      |             | Trim whitespace only, skip fit             |
+| `--fit`       |             | Fit to page only, skip trim                |
+| `--size`      | `letter`    | Page size: `WxH` in inches or paper name   |
+| `--landscape` |             | Landscape orientation (paper names only)   |
+| `--portrait`  |             | Portrait orientation (paper names only)    |
+| `--margin`    | `0.5`       | Minimum internal margin in inches          |
 
 ## Examples
 
 ```bash
-# Default: letter (8.5x11) with 0.5in margin
+# Default: trim and fit to letter (8.5x11) with 0.5in margin
 python trimfit.py input.pdf output.pdf
 
-# A4 landscape
-python trimfit.py input.pdf output.pdf --size a4 --landscape
+# Trim only (no page normalization)
+python trimfit.py input.pdf output.pdf --trim
+
+# Fit to A4 landscape without trimming
+python trimfit.py input.pdf output.pdf --fit --size a4 --landscape
 
 # Exact dimensions
 python trimfit.py input.pdf output.pdf --size 17x11 --margin 0.25
